@@ -5,7 +5,7 @@ from backend import get_answer, prepare_documents, load_documents
 documents = load_documents('documents')
 db = prepare_documents(documents)
 
-st.title("Chatbot Documentale con Gemma2")
+st.title("Chatbot Osservatori")
 
 user_input = st.text_input("Fai una domanda:")
 if st.button("Invia"):
