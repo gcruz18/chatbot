@@ -6,3 +6,4 @@ transformers
 ollama
 python-dotenv
 cryptography
+sentence-transformers
