@@ -7,3 +7,4 @@ ollama
 python-dotenv
 cryptography
 sentence-transformers
+langchain-community
