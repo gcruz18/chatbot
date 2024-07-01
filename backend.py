@@ -1,0 +1,1 @@
+documents = load_documents("documents")
