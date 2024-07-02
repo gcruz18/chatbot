@@ -35,4 +35,4 @@ Esecuzione dell'applicazione:
 
 Nel terminale, con l'ambiente virtuale attivato, naviga alla cartella del progetto
 Esegui:
-Copystreamlit run app.py
+streamlit run app.py
