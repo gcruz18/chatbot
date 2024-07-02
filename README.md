@@ -27,7 +27,7 @@ Configurazione di Ollama:
 
 Installa Ollama dal sito ufficiale
 Apri un terminale (diverso) e esegui:
-ollama pull gemma2
+ollama pull phi3:mini
 
 
 
