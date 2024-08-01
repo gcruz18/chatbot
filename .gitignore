@@ -1,0 +1,7 @@
+/venv
+.env
+documents/blockchain/*
+documents/metaverso/*
+documents/payment/*
+
+
