@@ -1,4 +1,5 @@
 import streamlit as st
+
 from backend import get_answer, get_clarification_answer, load_documents, prepare_documents
 import logging
 
@@ -71,3 +72,4 @@ if st.session_state.step == 3:
         st.session_state.sources = ""
         st.session_state.db = None
         st.rerun()
+
