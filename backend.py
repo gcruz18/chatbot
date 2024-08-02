@@ -50,7 +50,7 @@ def clarify_ollama(question):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = ollama.chat(model='gemma2:9b', messages=[
+            response = ollama.chat(model='gemma2:2b', messages=[
                 {
                     'role': 'system',
                     'content': 'Sei un assistente che deve essere sicuro del topic della domanda. Chiedi se la domanda si riferisce agli osservatori "Blockchain", "Payment" oppure "Metaverse"'
