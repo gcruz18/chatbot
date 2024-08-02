@@ -75,7 +75,7 @@ def query_ollama(question, context, sources):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = ollama.chat(model='gemma2:9b', messages=[
+            response = ollama.chat(model='gemma2:2b', messages=[
                 {
                     'role': 'system',
                     'content': 'Sei un assistente che risponde in italiano alle domande basandosi solo sulle informazioni fornite. Cita le fonti quando possibile. Se non trovi informazioni, rispondi solamente "Su questo al momento non posso risponderti. Chiedi maggiori informazioni all\'ufficio di riferimento."'
