@@ -25,7 +25,10 @@ Crea una sottocartella chiamata "documents" e inserisci i tuoi file PDF
 
 Configurazione di Ollama:
 
-Installa Ollama dal sito ufficiale
+Installa Ollama dal sito ufficiale: 
+Per linux: curl -fsSL https://ollama.com/install.sh | sh 
+
+
 Apri un terminale (diverso) e esegui:
 ollama pull nomic-embed-text:latest
 ollama pull phi3.5:lates
