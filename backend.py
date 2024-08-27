@@ -61,7 +61,7 @@ def create_chain_for_pdfs(pdf_text, metadatas):
         return_messages=True,
     )
     
-    llm_local = ChatOllama(model="gemma2:2b", default_language="it")  # Utilizzo del modello "phi3.5" con lingua italiana
+    llm_local = ChatOllama(model="phi3.5", default_language="it")  # Utilizzo del modello "phi3.5" con lingua italiana
     
     # Costruisci il prompt template
     prompt_template = _build_prompt_template()
