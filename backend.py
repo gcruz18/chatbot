@@ -1,121 +1,95 @@
 import os
-import logging
-from concurrent.futures import ThreadPoolExecutor
-from pypdf import PdfReader
-from langchain.text_splitter import CharacterTextSplitter
-from langchain.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
-import ollama
-import subprocess
-import time
-from dotenv import load_dotenv
+import PyPDF2
+from langchain_community.embeddings import OllamaEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma
+from langchain.chains import ConversationalRetrievalChain
+from langchain_community.chat_models import ChatOllama
+from langchain.memory import ConversationBufferMemory
+from langchain.prompts import PromptTemplate
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG
-)
-logger = logging.getLogger(__name__)
-
-load_dotenv()
-logger.debug("Environment variables loaded.")
-
-def load_single_document(filepath):
-    with open(filepath, 'rb') as file:
-        pdf_reader = PdfReader(file)
-        text = " ".join([page.extract_text() for page in pdf_reader.pages])
-    return {"content": text, "source": filepath}
-
-def load_documents(directory):
-    logger.debug("Loading documents from directory: %s", directory)
-    filepaths = [os.path.join(directory, filename) for filename in os.listdir(directory) if filename.endswith('.pdf')]
+def process_pdfs_from_directory(directory):
+    pdf_text = ""
+    documents_metadata = []
     
-    documents = []
-    with ThreadPoolExecutor() as executor:
-        documents = list(executor.map(load_single_document, filepaths))
+    for filename in os.listdir(directory):
+        if filename.endswith(".pdf"):
+            filepath = os.path.join(directory, filename)
+            with open(filepath, 'rb') as file:
+                pdf = PyPDF2.PdfReader(file)
+                document_title = pdf.metadata.get('/Title', filename)  # Usa il titolo del documento o il nome del file come fallback
+                if not document_title:  # Ulteriore controllo se il titolo è vuoto
+                    document_title = filename
+                
+                for page_num, page in enumerate(pdf.pages):
+                    page_text = page.extract_text() or ""  # Assicura di ottenere testo o una stringa vuota
+                    pdf_text += page_text
+                    documents_metadata.append({
+                        "source": f"{filename} (Page {page_num+1})",
+                        "title": document_title
+                    })
     
-    logger.debug("Loaded %d documents", len(documents))
-    return documents
+    return pdf_text, documents_metadata
 
-def prepare_documents(documents):
-    logger.debug("Preparing documents for embedding.")
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    texts = text_splitter.create_documents([doc["content"] for doc in documents], metadatas=[{"source": os.path.basename(doc["source"])} for doc in documents])
+def _build_prompt_template():
+    template = """
+Sei un assistente intelligente che risponde alle domande in modo chiaro e conciso, utilizzando le informazioni pertinenti dai documenti.
+
+Preferisci sempre come fonte i documenti. Se non trovi la risposta cercala da altre fonti.
+
+Se non conosci la risposta, ammetti di non saperlo.
+
+Inizia ora con la risposta.
+
+Domanda: {question}
+=========
+{context}
+=========
+Risposta:
+"""
+    return PromptTemplate(input_variables=["question", "context"], template=template)
+
+def create_chain_for_pdfs(pdf_text, metadatas):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    texts = text_splitter.split_text(pdf_text)
+    embeddings = OllamaEmbeddings(model="nomic-embed-text:latest")
+    docsearch = Chroma.from_texts(texts, embeddings, metadatas=metadatas)
     
-    embeddings = HuggingFaceEmbeddings()
-    db = FAISS.from_documents(texts, embeddings)
-    logger.debug("Documents prepared and indexed.")
-    return db
+    memory = ConversationBufferMemory(
+        memory_key="chat_history",
+        output_key="answer",
+        return_messages=True,
+    )
+    
+    llm_local = ChatOllama(model="gemma2:2b", default_language="it")  # Utilizzo del modello "phi3.5" con lingua italiana
+    
+    # Costruisci il prompt template
+    prompt_template = _build_prompt_template()
 
-def clarify_ollama(question):
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = ollama.chat(model='gemma2:2b', messages=[
-                {
-                    'role': 'system',
-                    'content': 'Sei un assistente che deve essere sicuro del topic della domanda. Chiedi se la domanda si riferisce agli osservatori "Blockchain", "Payment" oppure "Metaverse"'
-                },
-                {
-                    'role': 'user',
-                    'content': f"Domanda: {question}"
-                }
-            ])
-            return response['message']['content']
-        except Exception as e:
-            logger.error("Errore nella comunicazione con Ollama: %s", e)
-            if attempt < max_retries - 1:
-                logger.debug("Tentativo di riavvio di Ollama...")
-                subprocess.run(["ollama", "serve"], shell=True)
-                time.sleep(5)
-            else:
-                return "Mi dispiace, c'è un problema di comunicazione con il modello. Per favore, verifica che Ollama sia in esecuzione."
+    chain = ConversationalRetrievalChain.from_llm(
+        llm=llm_local,
+        retriever=docsearch.as_retriever(),
+        memory=memory,
+        combine_docs_chain_kwargs={"prompt": prompt_template},  # Integra il prompt template
+        return_source_documents=True,
+    )
+    return chain
 
+def get_answer_from_chain(chain, user_input):
+    response = chain.invoke({"question": user_input})
+    answer = response["answer"]
+    source_documents = response.get("source_documents", [])
 
-def query_ollama(question, context, sources):
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            response = ollama.chat(model='gemma2:2b', messages=[
-                {
-                    'role': 'system',
-                    'content': 'Sei un assistente che risponde in italiano alle domande basandosi solo sulle informazioni fornite. Cita le fonti quando possibile. Se non trovi informazioni, rispondi solamente "Su questo al momento non posso risponderti. Chiedi maggiori informazioni all\'ufficio di riferimento."'
-                },
-                {
-                    'role': 'user',
-                    'content': f"Contesto: {context}\n\nFonti: {sources}\n\nDomanda: {question}"
-                }
-            ])
-            return response['message']['content']
-        except Exception as e:
-            logger.error("Errore nella comunicazione con Ollama: %s", e)
-            if attempt < max_retries - 1:
-                logger.debug("Tentativo di riavvio di Ollama...")
-                subprocess.run(["ollama", "serve"], shell=True)
-                time.sleep(5)
-            else:
-                return "Mi dispiace, c'è un problema di comunicazione con il modello. Per favore, verifica che Ollama sia in esecuzione."
+    if source_documents:
+        # Creare la lista completa delle fonti
+        sources = [f"{doc.metadata.get('source', 'Fonte sconosciuta')}" for doc in source_documents]
 
+        # Convertire la lista in un set per ottenere solo valori unici
+        unique_sources = set(sources)
 
-def get_answer(question, db):
-    start_time = time.time()
+        # Aggiungere le fonti uniche alla risposta, ciascuna su una nuova riga con una virgola alla fine
+        answer += f"\n\nFonti:\n" + ",\n".join(unique_sources)
+    else:
+        answer += "\n\nNessuna fonte trovata"
 
-    docs = db.similarity_search(question, k=3)
-    context = " ".join([doc.page_content for doc in docs])
-    sources = ", ".join(set([doc.metadata['source'] for doc in docs]))
-
-    answer = query_ollama(question, context, sources)
-    end_time = time.time()
-    logger.debug("Similarity search and response received in %.2f seconds.", end_time - start_time)
-
-    return  answer, sources
-
-
-def get_clarification_answer(question):
-    start_time = time.time()
-
-    clarify_answer = clarify_ollama(question)
-
-    end_time = time.time()
-    logger.debug("Clarification response received in %.2f seconds.", end_time - start_time)
-
-    return clarify_answer
+    return answer
