@@ -3,7 +3,7 @@ Preparazione dell'ambiente:
 Assicurati di avere Python installato
 Crea una cartella per il progetto
 Crea un ambiente virtuale:
-python -m venv venv
+python3 -m venv venv
 
 Attiva l'ambiente virtuale:
 
@@ -27,7 +27,8 @@ Configurazione di Ollama:
 
 Installa Ollama dal sito ufficiale
 Apri un terminale (diverso) e esegui:
-ollama pull gemma2:2b
+ollama pull nomic-embed-text:latest
+ollama pull phi3.5:lates
 
 
 
