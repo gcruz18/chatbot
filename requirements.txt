@@ -1,11 +1,7 @@
-streamlit
-pypdf
 langchain
-faiss-cpu
-transformers
-ollama
-python-dotenv
-cryptography
-sentence-transformers
-langchain-community
-logging
+langchain_community
+PyPDF2
+chromadb
+#ollama
+streamlit
+pycryptodome
