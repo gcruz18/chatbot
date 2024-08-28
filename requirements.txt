@@ -5,3 +5,4 @@ chromadb
 ollama
 streamlit
 pycryptodome
+sentence-transformers
