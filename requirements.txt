@@ -6,4 +6,4 @@ ollama
 streamlit
 pycryptodome
 sentence-transformers
-faiss-gpu
+faiss-cpu
