@@ -31,7 +31,7 @@ Per linux: curl -fsSL https://ollama.com/install.sh | sh
 
 
 Apri un terminale (diverso) e esegui:
-ollama run qwen2:0.5b
+ollama run gemma2:2b
 
 
 
