@@ -72,7 +72,7 @@ def create_chain_for_pdfs(texts, metadatas):
     )
     
     # Utilizzo del modello ChatOllama (o un altro modello a tua scelta)
-    llm_local = ChatOllama(model="qwen2:0.5b", default_language="it", max_tokens=150)
+    llm_local = ChatOllama(model="gemma2:2b", default_language="it", max_tokens=150)
     
     # Costruzione del prompt template
     prompt_template = _build_prompt_template()
