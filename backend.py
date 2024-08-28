@@ -1,15 +1,15 @@
 import os
 import PyPDF2
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
-from langchain_community.chat_models import ChatOllama
+from langchain.chat_models import ChatOllama
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 
 def process_pdfs_from_directory(directory):
-    pdf_text = ""
+    texts = []
     documents_metadata = []
     
     for filename in os.listdir(directory):
@@ -20,40 +20,50 @@ def process_pdfs_from_directory(directory):
                 document_title = pdf.metadata.get('/Title', filename)  # Usa il titolo del documento o il nome del file come fallback
                 if not document_title:  # Ulteriore controllo se il titolo è vuoto
                     document_title = filename
-                
+
                 for page_num, page in enumerate(pdf.pages):
                     page_text = page.extract_text() or ""  # Assicura di ottenere testo o una stringa vuota
-                    pdf_text += page_text
+                    texts.append(page_text)
                     documents_metadata.append({
                         "source": f"{filename} (Page {page_num+1})",
                         "title": document_title
                     })
     
-    return pdf_text, documents_metadata
+    return texts, documents_metadata
 
 def _build_prompt_template():
     template = """
-Sei un assistente intelligente che risponde alle domande in modo chiaro e conciso, utilizzando le informazioni pertinenti dai documenti.
 
-Preferisci sempre come fonte i documenti. Se non trovi la risposta cercala da altre fonti.
 
-Se non conosci la risposta, ammetti di non saperlo.
+Usa le informazioni rilevanti dai documenti forniti per rispondere alla seguente domanda.
 
-Inizia ora con la risposta.
+Se non riesci a trovare la risposta nei documenti, ammetti di non saperlo.
 
 Domanda: {question}
-=========
-{context}
-=========
-Risposta:
+
+Contesto: {context}
+
+Fornisci una singola risposta chiara e concisa, non più lunga di 50 parole.
+
 """
     return PromptTemplate(input_variables=["question", "context"], template=template)
 
-def create_chain_for_pdfs(pdf_text, metadatas):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    texts = text_splitter.split_text(pdf_text)
-    embeddings = OllamaEmbeddings(model="nomic-embed-text:latest")
-    docsearch = Chroma.from_texts(texts, embeddings, metadatas=metadatas)
+def create_chain_for_pdfs(texts, metadatas):
+    # Suddividere i testi in segmenti più piccoli
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    split_texts = []
+    split_metadatas = []
+
+    for text, metadata in zip(texts, metadatas):
+        chunks = text_splitter.split_text(text)
+        split_texts.extend(chunks)
+        split_metadatas.extend([metadata] * len(chunks))
+    
+    # Utilizzo di HuggingFaceEmbeddings per generare gli embeddings
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    
+    # Indicizzazione vettoriale con FAISS
+    docsearch = FAISS.from_texts(split_texts, embeddings, metadatas=split_metadatas)
     
     memory = ConversationBufferMemory(
         memory_key="chat_history",
@@ -61,16 +71,17 @@ def create_chain_for_pdfs(pdf_text, metadatas):
         return_messages=True,
     )
     
-    llm_local = ChatOllama(model="phi3.5", default_language="it")  # Utilizzo del modello "phi3.5" con lingua italiana
+    # Utilizzo del modello ChatOllama (o un altro modello a tua scelta)
+    llm_local = ChatOllama(model="qwen2:0.5b", default_language="it", max_tokens=150)
     
-    # Costruisci il prompt template
+    # Costruzione del prompt template
     prompt_template = _build_prompt_template()
 
     chain = ConversationalRetrievalChain.from_llm(
         llm=llm_local,
         retriever=docsearch.as_retriever(),
         memory=memory,
-        combine_docs_chain_kwargs={"prompt": prompt_template},  # Integra il prompt template
+        combine_docs_chain_kwargs={"prompt": prompt_template},
         return_source_documents=True,
     )
     return chain
@@ -81,13 +92,8 @@ def get_answer_from_chain(chain, user_input):
     source_documents = response.get("source_documents", [])
 
     if source_documents:
-        # Creare la lista completa delle fonti
         sources = [f"{doc.metadata.get('source', 'Fonte sconosciuta')}" for doc in source_documents]
-
-        # Convertire la lista in un set per ottenere solo valori unici
         unique_sources = set(sources)
-
-        # Aggiungere le fonti uniche alla risposta, ciascuna su una nuova riga con una virgola alla fine
         answer += f"\n\nFonti:\n" + ",\n".join(unique_sources)
     else:
         answer += "\n\nNessuna fonte trovata"
