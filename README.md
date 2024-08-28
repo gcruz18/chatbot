@@ -31,10 +31,7 @@ Per linux: curl -fsSL https://ollama.com/install.sh | sh
 
 
 Apri un terminale (diverso) e esegui:
-
-ollama pull nomic-embed-text:latest
-
-ollama pull phi3.5:latest
+ollama run qwen2:0.5b
 
 
 
